@@ -94,6 +94,7 @@ modelrelay install --autostart
 modelrelay start --autostart
 modelrelay uninstall --autostart
 modelrelay status --autostart
+modelrelay update
 modelrelay autostart [--install|--start|--uninstall|--status]
 ```
 
@@ -102,6 +103,8 @@ Request terminal logging is disabled by default. Use `--log` to enable it.
 `modelrelay install --autostart` also triggers an immediate start attempt so you do not need a separate command after install.
 
 During `modelrelay onboard`, you will also be prompted to enable auto-start on login.
+
+`modelrelay update` upgrades the global npm package and, when autostart is configured, stops the background service first and starts it again after the update.
 
 ## Config
 

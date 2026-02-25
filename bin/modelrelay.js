@@ -5,9 +5,10 @@
  */
 
 import { parseArgs } from '../lib/utils.js'
+import { spawnSync } from 'node:child_process'
 import { loadConfig } from '../lib/config.js'
 import { runOnboard } from '../lib/onboard.js'
-import { getAutostartStatus, installAutostart, startAutostart, uninstallAutostart } from '../lib/autostart.js'
+import { getAutostartStatus, installAutostart, startAutostart, stopAutostart, uninstallAutostart } from '../lib/autostart.js'
 
 function printHelp() {
   console.log('modelrelay')
@@ -19,6 +20,7 @@ function printHelp() {
   console.log('  modelrelay start --autostart')
   console.log('  modelrelay uninstall --autostart')
   console.log('  modelrelay status --autostart')
+  console.log('  modelrelay update')
   console.log('  modelrelay autostart [--install|--start|--uninstall|--status]')
   console.log('')
   console.log('Flags:')
@@ -33,6 +35,65 @@ function printHelp() {
   console.log('  --uninstall        For autostart subcommand: disable at login')
   console.log('  --status           For autostart subcommand: show status')
   console.log('  --help, -h         Show help')
+}
+
+function runNpmUpdate() {
+  const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm'
+  const result = spawnSync(npmCommand, ['install', '-g', 'modelrelay@latest'], { stdio: 'pipe', encoding: 'utf8' })
+
+  if (result.error) {
+    return {
+      ok: false,
+      message: `Failed to run npm update: ${result.error.message}`,
+    }
+  }
+
+  if (result.status !== 0) {
+    const details = (result.stderr || result.stdout || 'npm update failed').trim()
+    return {
+      ok: false,
+      message: `npm global update failed: ${details}`,
+    }
+  }
+
+  return {
+    ok: true,
+    message: 'Updated modelrelay to latest npm version.',
+  }
+}
+
+function runUpdateCommand() {
+  const status = getAutostartStatus()
+  const shouldManageBackground = status.supported && status.configured
+  const messages = []
+
+  if (shouldManageBackground) {
+    const stopResult = stopAutostart()
+    if (!stopResult.ok) return stopResult
+    messages.push(stopResult.message)
+  } else {
+    messages.push('Autostart is not configured; skipping background stop/start.')
+  }
+
+  const updateResult = runNpmUpdate()
+  if (!updateResult.ok) return updateResult
+  messages.push(updateResult.message)
+
+  if (shouldManageBackground) {
+    const startResult = startAutostart()
+    if (!startResult.ok) {
+      return {
+        ok: false,
+        message: `${messages.join('\n')}\nUpdate succeeded, but failed to restart autostart target: ${startResult.message}`,
+      }
+    }
+    messages.push(startResult.message)
+  }
+
+  return {
+    ok: true,
+    message: messages.join('\n'),
+  }
 }
 
 function runAutostartAction(action) {
@@ -76,6 +137,17 @@ async function main() {
     if (result.ok) {
       console.log(result.message)
       if (result.path) console.log(`Path: ${result.path}`)
+      return
+    }
+
+    console.error(result.message)
+    process.exit(1)
+  }
+
+  if (cliArgs.command === 'update') {
+    const result = runUpdateCommand()
+    if (result.ok) {
+      console.log(result.message)
       return
     }
 

@@ -268,6 +268,12 @@ describe('parseArgs', () => {
     assert.equal(parseArgs(argv('autostart', '--start')).autostartAction, 'start')
     assert.equal(parseArgs(argv('autostart', 'uninstall')).autostartAction, 'uninstall')
   })
+
+  it('parses update subcommand', () => {
+    const result = parseArgs(argv('update'))
+    assert.equal(result.command, 'update')
+    assert.equal(result.autostartAction, null)
+  })
 })
 
 describe('parseOpenRouterKeyRateLimit', () => {
