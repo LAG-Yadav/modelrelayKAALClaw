@@ -15,6 +15,7 @@ import {
   parseOpenRouterKeyRateLimit,
   VERDICT_ORDER,
 } from '../lib/utils.js'
+import { buildOpenClawProviderConfig } from '../lib/onboard.js'
 import { resolveAutostartExecPath, resolveAutostartNodePath } from '../lib/autostart.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -322,6 +323,16 @@ describe('autostart', () => {
 
   it('falls back to node command when node path is missing', () => {
     assert.equal(resolveAutostartNodePath('/definitely/not/a/file/node'), 'node')
+  })
+})
+
+describe('onboard integrations', () => {
+  it('builds OpenClaw provider config with required models array', () => {
+    const provider = buildOpenClawProviderConfig(7352)
+
+    assert.equal(provider.baseUrl, 'http://127.0.0.1:7352/v1')
+    assert.equal(provider.api, 'openai-completions')
+    assert.deepEqual(provider.models, [{ id: 'auto-fastest', name: 'Auto Fastest' }])
   })
 })
 
