@@ -91,12 +91,15 @@ If you want manual setup, merge this into `~/.openclaw/openclaw.json`:
 modelrelay [--port <number>] [--log] [--ban <model1,model2>]
 modelrelay onboard [--port <number>]
 modelrelay install --autostart
+modelrelay start --autostart
 modelrelay uninstall --autostart
 modelrelay status --autostart
-modelrelay autostart [--install|--uninstall|--status]
+modelrelay autostart [--install|--start|--uninstall|--status]
 ```
 
 Request terminal logging is disabled by default. Use `--log` to enable it.
+
+`modelrelay install --autostart` also triggers an immediate start attempt so you do not need a separate command after install.
 
 During `modelrelay onboard`, you will also be prompted to enable auto-start on login.
 

@@ -245,6 +245,11 @@ describe('parseArgs', () => {
     assert.equal(install.autostart, true)
     assert.equal(install.autostartAction, 'install')
 
+    const start = parseArgs(argv('start', '--autostart'))
+    assert.equal(start.command, 'start')
+    assert.equal(start.autostart, true)
+    assert.equal(start.autostartAction, 'start')
+
     const uninstall = parseArgs(argv('uninstall', 'autostart'))
     assert.equal(uninstall.command, 'uninstall')
     assert.equal(uninstall.autostart, true)
@@ -260,6 +265,7 @@ describe('parseArgs', () => {
     assert.equal(parseArgs(argv('autostart')).autostartAction, 'status')
     assert.equal(parseArgs(argv('autostart', '--status')).autostartAction, 'status')
     assert.equal(parseArgs(argv('autostart', '--install')).autostartAction, 'install')
+    assert.equal(parseArgs(argv('autostart', '--start')).autostartAction, 'start')
     assert.equal(parseArgs(argv('autostart', 'uninstall')).autostartAction, 'uninstall')
   })
 })
