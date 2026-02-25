@@ -1,0 +1,60 @@
+{
+  "name": "modelrelay",
+  "version": "1.0.0",
+  "description": "OpenAI-compatible local router that benchmarks free coding models across providers and forwards requests to the best available model.",
+  "keywords": [
+    "nvidia",
+    "nim",
+    "llm",
+    "cli",
+    "ai",
+    "models",
+    "benchmark",
+    "latency",
+    "availability",
+    "deepseek",
+    "qwen",
+    "llama",
+    "mistral",
+    "glm",
+    "kimi",
+    "gpt",
+    "chatgpt",
+    "openai",
+    "api"
+  ],
+  "homepage": "https://github.com/modelrelay#readme",
+  "bugs": {
+    "url": "https://github.com/modelrelay/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/modelrelay.git"
+  },
+  "license": "MIT",
+  "author": "anonymous",
+  "type": "module",
+  "main": "bin/modelrelay.js",
+  "bin": {
+    "modelrelay": "./bin/modelrelay.js"
+  },
+  "files": [
+    "bin/",
+    "lib/",
+    "public/",
+    "sources.js",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "start": "node bin/modelrelay.js",
+    "test": "node --test test/test.js"
+  },
+  "dependencies": {
+    "chalk": "^5.4.1",
+    "express": "^5.2.1"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
