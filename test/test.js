@@ -11,6 +11,8 @@ import {
   getUptime,
   sortResults,
   findBestModel,
+  rankModelsForRouting,
+  isRetryableProxyStatus,
   parseArgs,
   parseOpenRouterKeyRateLimit,
   VERDICT_ORDER,
@@ -204,6 +206,46 @@ describe('findBestModel', () => {
       mockResult({ label: 'Faster', status: 'up', pings: [{ ms: 120, code: '200' }, { ms: 200, code: '200' }] }),
     ]
     assert.equal(findBestModel(results).label, 'Faster')
+  })
+})
+
+describe('rankModelsForRouting', () => {
+  it('returns candidates sorted by QoS', () => {
+    const results = [
+      mockResult({ label: 'Slower', status: 'up', pings: [{ ms: 900, code: '200' }] }),
+      mockResult({ label: 'Faster', status: 'up', pings: [{ ms: 120, code: '200' }] }),
+    ]
+
+    const ranked = rankModelsForRouting(results)
+    assert.equal(ranked[0].label, 'Faster')
+    assert.equal(ranked[1].label, 'Slower')
+  })
+
+  it('excludes requested model IDs and ineligible states', () => {
+    const results = [
+      mockResult({ modelId: 'a', label: 'A', status: 'up', pings: [{ ms: 100, code: '200' }] }),
+      mockResult({ modelId: 'b', label: 'B', status: 'banned', pings: [{ ms: 50, code: '200' }] }),
+      mockResult({ modelId: 'c', label: 'C', status: 'disabled', pings: [{ ms: 50, code: '200' }] }),
+      mockResult({ modelId: 'd', label: 'D', status: 'up', pings: [{ ms: 300, code: '200' }] }),
+    ]
+
+    const ranked = rankModelsForRouting(results, ['a'])
+    assert.deepEqual(ranked.map(r => r.modelId), ['d'])
+  })
+})
+
+describe('isRetryableProxyStatus', () => {
+  it('returns true for 429 and 5xx', () => {
+    assert.equal(isRetryableProxyStatus(429), true)
+    assert.equal(isRetryableProxyStatus('500'), true)
+    assert.equal(isRetryableProxyStatus(503), true)
+  })
+
+  it('returns false for non-retryable statuses', () => {
+    assert.equal(isRetryableProxyStatus(200), false)
+    assert.equal(isRetryableProxyStatus(400), false)
+    assert.equal(isRetryableProxyStatus(404), false)
+    assert.equal(isRetryableProxyStatus('not-a-status'), false)
   })
 })
 

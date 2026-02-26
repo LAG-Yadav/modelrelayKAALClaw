@@ -2098,6 +2098,11 @@
         container.innerHTML = logs.map(l => {
           const date = new Date(l.timestamp);
           const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+          const attempts = Array.isArray(l.attempts) ? l.attempts : [];
+          const retryCount = typeof l.retryCount === 'number'
+            ? l.retryCount
+            : Math.max(0, attempts.length - 1);
+          const hadFailover = retryCount > 0;
           let statusBadge = '';
           if (l.status === '200') statusBadge = '<span style="background: #ecfdf5; color: #065f46; padding: 2px 8px; border-radius: 999px; font-size: 0.75rem; font-weight: 600;">200 OK</span>';
           else if (l.status === 'pending') statusBadge = '<span style="background: #eff6ff; color: #1e40af; padding: 2px 8px; border-radius: 999px; font-size: 0.75rem; font-weight: 600;">Pending...</span>';
@@ -2166,6 +2171,41 @@
             `;
           }
 
+          let failoverHtml = '';
+          if (attempts.length > 0) {
+            const attemptRows = attempts.map((a, idx) => {
+              const code = a && a.status ? String(a.status) : 'unknown';
+              const isOk = code === '200';
+              const isRetryable = !!(a && a.retryable);
+              const chipBg = isOk ? '#ecfdf5' : (isRetryable ? '#fffbeb' : '#fef2f2');
+              const chipFg = isOk ? '#065f46' : (isRetryable ? '#92400e' : '#991b1b');
+              const model = a && a.model ? a.model : '(unknown model)';
+              const provider = a && a.provider ? a.provider : '(unknown provider)';
+              const duration = a && a.duration != null ? `${a.duration}ms` : 'n/a';
+              const err = a && a.error
+                ? `<div style="margin-top:4px; color: var(--text-muted); font-size:0.72rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${String(a.error).replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>`
+                : '';
+              return `
+                <div style="padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; background: #faf9f8;">
+                  <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
+                    <div style="font-size:0.78rem; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"><span style="color:var(--text-muted);">#${idx + 1}</span> ${provider}/${model}</div>
+                    <div style="display:flex; align-items:center; gap:6px; flex-shrink:0;">
+                      <span style="font-size:0.7rem; color:var(--text-muted);">${duration}</span>
+                      <span style="background:${chipBg}; color:${chipFg}; padding:2px 6px; border-radius:999px; font-size:0.68rem; font-weight:700;">${code}</span>
+                    </div>
+                  </div>
+                  ${err}
+                </div>`;
+            }).join('');
+
+            failoverHtml = `
+              <div style="margin-top: 12px; border-left: 3px solid ${hadFailover ? 'var(--warning)' : 'var(--accent)'}; padding-left: 12px;">
+                <div style="font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: ${hadFailover ? 'var(--warning)' : 'var(--accent)'}; margin-bottom: 6px;">ROUTING ATTEMPTS ${hadFailover ? `(Failovers: ${retryCount})` : ''}</div>
+                <div style="display:flex; flex-direction:column; gap:6px;">${attemptRows}</div>
+              </div>
+            `;
+          }
+
           const logModelStatus = allModels ? (allModels.find(m => m.modelId === l.model)?.status || 'unknown') : 'unknown';
           const isBanned = logModelStatus === 'banned';
           // Use a stable unique id for toggling
@@ -2185,6 +2225,7 @@
                       <span>${timeStr}</span>
                       <span>•</span>
                       <span>${l.provider}</span>
+                      ${hadFailover ? `<span>•</span><span style="color: var(--warning); font-weight: 600;">🔁 ${retryCount} failover${retryCount > 1 ? 's' : ''}</span>` : ''}
                       ${l.duration ? `<span>•</span><span>${l.duration}ms total</span>` : ''}
                       ${l.ttft != null && l.ttft !== l.duration ? `<span>•</span><span style="color: var(--accent);">⚡ ${l.ttft}ms TTFT</span>` : ''}
                       ${l.prompt_tokens != null || l.completion_tokens != null ? `<span>•</span><span style="color: var(--text-muted);"><span style="font-weight: 600; color: var(--text);">${l.prompt_tokens || 0}</span> in / <span style="font-weight: 600; color: var(--text);">${l.completion_tokens || 0}</span> out</span>` : ''}
@@ -2197,6 +2238,7 @@
                 ${responseHtml}
                 ${toolCallsHtml}
                 ${functionCallHtml}
+                ${failoverHtml}
                 ${errorHtml}
                 <div style="margin-top:16px; padding-top:12px; border-top:1px solid var(--border); display:flex; justify-content:flex-end;">
                   <button onclick="event.stopPropagation(); toggleBan('${l.model}', '${logModelStatus}')" style="background: ${isBanned ? '#e5e7eb' : '#fef2f2'}; border: 1px solid ${isBanned ? '#d1d5db' : '#fecaca'}; padding: 6px 14px; border-radius: 6px; font-size: 0.75rem; font-weight: 600; color: ${isBanned ? '#374151' : '#991b1b'}; cursor: pointer;">${isBanned ? '✓ Unban Model' : '🚫 Ban Model'}</button>
