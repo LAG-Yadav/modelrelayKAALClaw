@@ -940,6 +940,29 @@
     .log-card.expanded .log-card-body {
       display: block;
     }
+
+    .logs-mode-toggle {
+      display: inline-flex;
+      border: 1px solid var(--border);
+      border-radius: 9px;
+      overflow: hidden;
+      background: #fff;
+    }
+
+    .logs-mode-btn {
+      border: 0;
+      background: transparent;
+      color: var(--text-muted);
+      font-size: 0.78rem;
+      font-weight: 600;
+      padding: 8px 12px;
+      cursor: pointer;
+    }
+
+    .logs-mode-btn.active {
+      background: #f3f4f6;
+      color: var(--text);
+    }
   </style>
 </head>
 
@@ -1153,8 +1176,16 @@
           <p style="color: var(--text-muted); margin: 4px 0 0; font-size: 0.875rem;">Last 50 requests proxied through
             the router.</p>
         </div>
-        <button onclick="loadLogs()" class="btn"
-          style="background: white; color: var(--text); border: 1px solid var(--border);">Refresh Logs</button>
+        <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; justify-content:flex-end;">
+          <div class="logs-mode-toggle" role="tablist" aria-label="Logs view mode">
+            <button id="logs-mode-cards" class="logs-mode-btn" onclick="setLogsViewMode('cards')" role="tab"
+              aria-selected="false">Request Cards</button>
+            <button id="logs-mode-history" class="logs-mode-btn active" onclick="setLogsViewMode('history')" role="tab"
+              aria-selected="true">Message History</button>
+          </div>
+          <button onclick="loadLogs()" class="btn"
+            style="background: white; color: var(--text); border: 1px solid var(--border);">Refresh Logs</button>
+        </div>
       </div>
       <div id="logs-container" style="display: flex; flex-direction: column; gap: 16px;">
         <!-- Logs generated here -->
@@ -1268,6 +1299,7 @@
     let activePinnedModelId = null; // tracks the currently pinned model server-side
     let isTableHovered = false;
     let metaLoaded = false;
+    let logsViewMode = 'history';
 
 
 
@@ -2085,15 +2117,20 @@
         const logs = await res.json();
         const container = document.getElementById('logs-container');
 
-        const expandedCards = new Set();
-        document.querySelectorAll('.log-card.expanded').forEach(card => {
-          expandedCards.add(card.id);
-        });
-
         if (logs.length === 0) {
           container.innerHTML = '<div style="padding: 32px; text-align: center; color: var(--text-muted); background: var(--card); border: 1px solid var(--border); border-radius: 12px;">No requests have been routed yet.</div>';
           return;
         }
+
+        if (logsViewMode === 'history') {
+          renderMessageHistory(logs, container);
+          return;
+        }
+
+        const expandedCards = new Set();
+        document.querySelectorAll('.log-card.expanded').forEach(card => {
+          expandedCards.add(card.id);
+        });
 
         container.innerHTML = logs.map(l => {
           const date = new Date(l.timestamp);
@@ -2248,6 +2285,185 @@
           `;
         }).join('');
       } catch (err) { console.error(err); }
+    }
+
+    function setLogsViewMode(mode) {
+      logsViewMode = mode === 'history' ? 'history' : 'cards';
+      const cardsBtn = document.getElementById('logs-mode-cards');
+      const historyBtn = document.getElementById('logs-mode-history');
+      if (cardsBtn && historyBtn) {
+        cardsBtn.classList.toggle('active', logsViewMode === 'cards');
+        historyBtn.classList.toggle('active', logsViewMode === 'history');
+        cardsBtn.setAttribute('aria-selected', logsViewMode === 'cards' ? 'true' : 'false');
+        historyBtn.setAttribute('aria-selected', logsViewMode === 'history' ? 'true' : 'false');
+      }
+      loadLogs();
+    }
+
+    function escapeHtml(value) {
+      return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+    }
+
+    function stableStringify(value) {
+      if (value == null || typeof value !== 'object') {
+        return JSON.stringify(value);
+      }
+      if (Array.isArray(value)) {
+        return '[' + value.map(stableStringify).join(',') + ']';
+      }
+      const keys = Object.keys(value).sort();
+      return '{' + keys.map(k => JSON.stringify(k) + ':' + stableStringify(value[k])).join(',') + '}';
+    }
+
+    function getLocalDayKey(ts) {
+      const d = new Date(ts);
+      if (Number.isNaN(d.getTime())) return 'invalid-day';
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${y}-${m}-${day}`;
+    }
+
+    function simpleHash(input) {
+      let hash = 2166136261;
+      for (let i = 0; i < input.length; i++) {
+        hash ^= input.charCodeAt(i);
+        hash = Math.imul(hash, 16777619);
+      }
+      return (hash >>> 0).toString(16);
+    }
+
+    function normalizeMessageForHash(msg) {
+      const normalized = {
+        role: msg && msg.role ? String(msg.role) : 'unknown',
+        name: msg && msg.name ? String(msg.name) : '',
+        tool_call_id: msg && msg.tool_call_id ? String(msg.tool_call_id) : '',
+        content: msg && msg.content != null ? msg.content : '',
+      };
+      if (msg && msg.tool_calls != null) normalized.tool_calls = msg.tool_calls;
+      if (msg && msg.function_call != null) normalized.function_call = msg.function_call;
+      return stableStringify(normalized);
+    }
+
+    function formatMessageContent(content) {
+      if (typeof content === 'string') return content;
+      if (content == null) return '';
+      try {
+        return JSON.stringify(content, null, 2);
+      } catch {
+        return String(content);
+      }
+    }
+
+    function roleColor(role) {
+      if (role === 'system') return 'var(--warning)';
+      if (role === 'user') return 'var(--success)';
+      if (role === 'assistant') return 'var(--accent)';
+      if (role === 'tool') return '#8b5cf6';
+      return 'var(--text-muted)';
+    }
+
+    function renderMessageHistory(logs, container) {
+      const deduped = [];
+      const seen = new Set();
+      let insertSeq = 0;
+
+      const mostRecentFirst = Array.isArray(logs) ? logs : [];
+      for (const l of mostRecentFirst) {
+        const timestamp = l && l.timestamp ? l.timestamp : null;
+        const model = l && l.model ? l.model : '(unknown model)';
+        const sourceMessages = Array.isArray(l && l.messages)
+          ? [...l.messages].reverse()
+          : (typeof (l && l.messages) === 'string' ? [{ role: 'raw', content: l.messages }] : []);
+
+        if (l && l.response) {
+          const assistantCandidate = { role: 'assistant', content: l.response };
+          const dedupeKey = `${getLocalDayKey(timestamp)}:${simpleHash(normalizeMessageForHash(assistantCandidate))}`;
+          if (!seen.has(dedupeKey)) {
+            seen.add(dedupeKey);
+            deduped.push({ role: 'assistant', content: l.response, timestamp, model, tsMs: Date.parse(timestamp || ''), seq: insertSeq++ });
+          }
+        }
+
+        if (l && l.tool_calls) {
+          const toolCallsCandidate = { role: 'assistant', content: l.tool_calls };
+          const dedupeKey = `${getLocalDayKey(timestamp)}:${simpleHash(normalizeMessageForHash(toolCallsCandidate))}`;
+          if (!seen.has(dedupeKey)) {
+            seen.add(dedupeKey);
+            deduped.push({ role: 'assistant', content: l.tool_calls, timestamp, model, tsMs: Date.parse(timestamp || ''), seq: insertSeq++ });
+          }
+        }
+
+        if (l && l.function_call) {
+          const functionCallCandidate = { role: 'assistant', content: l.function_call };
+          const dedupeKey = `${getLocalDayKey(timestamp)}:${simpleHash(normalizeMessageForHash(functionCallCandidate))}`;
+          if (!seen.has(dedupeKey)) {
+            seen.add(dedupeKey);
+            deduped.push({ role: 'assistant', content: l.function_call, timestamp, model, tsMs: Date.parse(timestamp || ''), seq: insertSeq++ });
+          }
+        }
+
+        for (const m of sourceMessages) {
+          const role = m && m.role ? String(m.role) : 'unknown';
+          const content = m && m.content != null ? m.content : '';
+          const candidate = {
+            role,
+            content,
+            name: m && m.name ? m.name : '',
+            tool_call_id: m && m.tool_call_id ? m.tool_call_id : '',
+            tool_calls: m && m.tool_calls ? m.tool_calls : undefined,
+            function_call: m && m.function_call ? m.function_call : undefined,
+          };
+          const dedupeKey = `${getLocalDayKey(timestamp)}:${simpleHash(normalizeMessageForHash(candidate))}`;
+          if (seen.has(dedupeKey)) continue;
+          seen.add(dedupeKey);
+          deduped.push({ role, content, timestamp, model, tsMs: Date.parse(timestamp || ''), seq: insertSeq++ });
+        }
+      }
+
+      deduped.sort((a, b) => {
+        const aTs = Number.isNaN(a.tsMs) ? -Infinity : a.tsMs;
+        const bTs = Number.isNaN(b.tsMs) ? -Infinity : b.tsMs;
+        if (bTs !== aTs) return bTs - aTs;
+        return a.seq - b.seq;
+      });
+
+      if (deduped.length === 0) {
+        container.innerHTML = '<div style="padding: 24px; text-align:center; color:var(--text-muted); background: var(--card); border: 1px solid var(--border); border-radius: 12px;">No messages found in recent request logs.</div>';
+        return;
+      }
+
+      container.innerHTML = deduped.map(item => {
+        const role = item.role || 'unknown';
+        const date = new Date(item.timestamp);
+        const timeStr = Number.isNaN(date.getTime())
+          ? 'Unknown time'
+          : date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        const dateStr = Number.isNaN(date.getTime())
+          ? 'Unknown date'
+          : date.toLocaleDateString([], { year: 'numeric', month: 'short', day: '2-digit' });
+        const content = escapeHtml(formatMessageContent(item.content));
+        const badgeColor = roleColor(role);
+
+        return `
+          <div style="background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.02);">
+            <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
+              <span style="font-size: 0.68rem; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; color:${badgeColor};">${escapeHtml(role)}</span>
+            </div>
+            <div style="font-family: monospace; font-size: 0.8rem; white-space: pre-wrap; word-break: break-word; color: var(--text); background: #faf9f8; padding: 9px; border-radius: 7px; border: 1px solid var(--border); max-height: 240px; overflow-y:auto;">${content}</div>
+            <div style="margin-top:8px; font-size: 0.74rem; color: var(--text-muted); display:flex; gap:8px; flex-wrap:wrap;">
+              <span>${timeStr}</span>
+              <span>•</span>
+              <span>${dateStr}</span>
+              <span>•</span>
+              <span>${escapeHtml(item.model || '(unknown model)')}</span>
+            </div>
+          </div>
+        `;
+      }).join('');
     }
 
     function toggleLogCard(id) {
