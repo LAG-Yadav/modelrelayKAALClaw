@@ -36,6 +36,7 @@ function printHelp() {
   console.log('  --uninstall        For autostart subcommand: disable at login')
   console.log('  --status           For autostart subcommand: show status')
   console.log('  --help, -h         Show help')
+  console.log('  --json             Output status in JSON format')
 }
 
 function runNpmUpdate() {
@@ -63,7 +64,7 @@ function runNpmUpdate() {
   }
 }
 
-function runUpdateCommand() {
+function runUpdateCommand(json) {
   const status = getAutostartStatus()
   const shouldManageBackground = status.supported && status.configured
   const messages = []
@@ -71,14 +72,14 @@ function runUpdateCommand() {
   if (shouldManageBackground) {
     const stopResult = stopAutostart()
     if (!stopResult.ok) return stopResult
-    messages.push(stopResult.message)
+    if (!json) messages.push(stopResult.message)
   } else {
-    messages.push('Autostart is not configured; skipping background stop/start.')
+    if (!json) messages.push('Autostart is not configured; skipping background stop/start.')
   }
 
   const updateResult = runNpmUpdate()
   if (!updateResult.ok) return updateResult
-  messages.push(updateResult.message)
+  if (!json) messages.push(updateResult.message)
 
   if (shouldManageBackground) {
     const startResult = startAutostart()
@@ -88,7 +89,7 @@ function runUpdateCommand() {
         message: `${messages.join('\n')}\nUpdate succeeded, but failed to restart autostart target: ${startResult.message}`,
       }
     }
-    messages.push(startResult.message)
+    if (!json) messages.push(startResult.message)
   }
 
   return {
@@ -97,7 +98,7 @@ function runUpdateCommand() {
   }
 }
 
-function runAutostartAction(action) {
+function runAutostartAction(action, json) {
   if (action === 'install') {
     const installResult = installAutostart()
     if (!installResult.ok) return installResult
@@ -108,7 +109,7 @@ function runAutostartAction(action) {
         ok: true,
         supported: installResult.supported,
         path: installResult.path,
-        message: `${installResult.message}\nAutostart install succeeded, but start-now failed: ${startResult.message}`,
+        message: json ? 'Install OK, Start Failed' : `${installResult.message}\nAutostart install succeeded, but start-now failed: ${startResult.message}`,
       }
     }
 
@@ -116,7 +117,7 @@ function runAutostartAction(action) {
       ok: true,
       supported: installResult.supported,
       path: installResult.path,
-      message: `${installResult.message}\n${startResult.message}`,
+      message: json ? 'OK' : `${installResult.message}\n${startResult.message}`,
     }
   }
   if (action === 'start') return startAutostart()
@@ -133,7 +134,12 @@ async function main() {
   }
 
   if (cliArgs.autostartAction) {
-    const result = runAutostartAction(cliArgs.autostartAction)
+    const result = runAutostartAction(cliArgs.autostartAction, cliArgs.json)
+
+    if (cliArgs.json) {
+      console.log(JSON.stringify(result, null, 2))
+      return
+    }
 
     if (result.ok) {
       console.log(result.message)
@@ -150,7 +156,13 @@ async function main() {
   }
 
   if (cliArgs.command === 'update') {
-    const result = runUpdateCommand()
+    const result = runUpdateCommand(cliArgs.json)
+
+    if (cliArgs.json) {
+      console.log(JSON.stringify(result, null, 2))
+      return
+    }
+
     if (result.ok) {
       console.log(result.message)
       return
