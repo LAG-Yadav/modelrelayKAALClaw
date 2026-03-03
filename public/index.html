@@ -1614,7 +1614,7 @@
             // Also flag when credits are exhausted (e.g. OpenRouter free tier).
             // Credits are an account-level balance (not a sliding window), so
             // creditRemaining <= 0 is an authoritative signal.
-            if (m.rateLimit.creditLimit != null && m.rateLimit.creditRemaining != null && m.rateLimit.creditRemaining <= 0) {
+            if (m.rateLimit.creditLimit > 0 && m.rateLimit.creditRemaining != null && m.rateLimit.creditRemaining <= 0) {
               isRateLimited = true;
               if (m.rateLimit.creditResetAt && m.rateLimit.creditResetAt > now) {
                 rateLimitResetMs = Math.max(rateLimitResetMs, m.rateLimit.creditResetAt - now);
