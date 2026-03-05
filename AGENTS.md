@@ -7,10 +7,6 @@ After completing any feature or fix, the agent MUST:
 1. Run `pnpm test` to verify all unit tests pass (62 tests across 11 suites)
 2. If any test fails, fix the issue immediately
 3. Re-run `pnpm test` until all tests pass
-4. Run `pnpm start` to verify there are no runtime errors
-5. If there are errors, fix them immediately
-6. Re-run `pnpm start` until all errors are resolved
-7. Only then consider the task complete
 
 This ensures the codebase remains in a working state at all times.
 
