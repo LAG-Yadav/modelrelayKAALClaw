@@ -14,7 +14,7 @@
 
 ---
 
-### 🔥 100% Free • Auto-Routing • 80+ Models • 10+ Providers • OpenAI-Compatible
+### 🔥 100% Free • Auto-Routing • 80+ Models • 11+ Providers • OpenAI-Compatible
 
 **modelrelay** is an OpenAI-compatible local router that benchmarks free coding models across top providers and automatically forwards your requests to the best available model. 
 
@@ -22,7 +22,7 @@
 
 - 💸 **Completely Free:** Stop paying for API usage. We seamlessly provide access to robust free models.
 - 🧠 **State-of-the-Art (SOTA) Models:** Out-of-the-box availability for top-tier models including **Kimi K2.5, Minimax M2.5, GLM 5, Deepseek V3.2**, and more.
-- 🏢 **Reliable Providers:** We route requests securely through trusted, high-performance platforms like **NVIDIA, Groq, OpenRouter, and Google**.
+- 🏢 **Reliable Providers:** We route requests securely through trusted, high-performance platforms like **NVIDIA, Groq, OpenRouter, OpenCode Zen, and Google**.
 - ⚡ **Lightning Fast:** The built-in benchmark continually evaluates metrics to pick the fastest and most capable LLM for your request.
 - 🔄 **OpenAI-Compatible:** A perfect drop-in replacement that works seamlessly with your existing tools, scripts, and workflows.
 
@@ -212,6 +212,7 @@ Example:
   - `CEREBRAS_API_KEY`
   - `SAMBANOVA_API_KEY`
   - `OPENROUTER_API_KEY`
+  - `OPENCODE_API_KEY`
   - `CODESTRAL_API_KEY`
   - `HYPERBOLIC_API_KEY`
   - `SCALEWAY_API_KEY`

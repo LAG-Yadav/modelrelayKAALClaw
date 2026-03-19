@@ -25,7 +25,7 @@ import { resolveAutostartExecPath, resolveAutostartNodePath } from '../lib/autos
 import { exportConfigToken, getApiKey, getProviderBaseUrl, getProviderModelId, getProviderPingIntervalMs, importConfigToken } from '../lib/config.js'
 import { buildNpmInstallInvocation, buildWindowsPostUpdateRestartCommand, getForcedUpdateVersion, getLocalUpdateTarballPath, getLocalUpdateVersion, isRunningFromSource, shouldStopAutostartBeforeUpdate } from '../lib/update.js'
 import { isQwenOauthAccessTokenValid, pollQwenOauthDeviceToken, resolveQwenCodeOauthAccessToken, startQwenOauthDeviceLogin } from '../lib/qwencodeAuth.js'
-import { toOpenRouterModelMeta, toKiloCodeModelMeta } from '../lib/server.js'
+import { toOpenCodeModelMeta, toOpenRouterModelMeta, toKiloCodeModelMeta } from '../lib/server.js'
 import { canonicalizeModelId } from '../sources.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -123,6 +123,12 @@ describe('sources data integrity', () => {
     assert.ok(sources['openai-compatible'])
     assert.equal(sources['openai-compatible'].name, 'OpenAI-Compatible')
     assert.ok(Array.isArray(sources['openai-compatible'].models))
+  })
+
+  it('includes OpenCode Zen provider', () => {
+    assert.ok(sources.opencode)
+    assert.equal(sources.opencode.name, 'OpenCode Zen')
+    assert.ok(Array.isArray(sources.opencode.models))
   })
 
   it('has expected provider structure', () => {
@@ -249,6 +255,22 @@ describe('provider api key resolution', () => {
       else process.env.OPENAI_COMPATIBLE_MODEL = originalModel
     }
   })
+
+  it('supports OpenCode provider env var override', () => {
+    const original = process.env.OPENCODE_API_KEY
+
+    try {
+      delete process.env.OPENCODE_API_KEY
+      assert.equal(getApiKey({ apiKeys: {} }, 'opencode'), null)
+
+      process.env.OPENCODE_API_KEY = 'opencode-env-key'
+      assert.equal(getApiKey({ apiKeys: {} }, 'opencode'), 'opencode-env-key')
+      assert.equal(getApiKey({ apiKeys: { opencode: 'file-key' } }, 'opencode'), 'opencode-env-key')
+    } finally {
+      if (original == null) delete process.env.OPENCODE_API_KEY
+      else process.env.OPENCODE_API_KEY = original
+    }
+  })
 })
 
 describe('dynamic model score resolution', () => {
@@ -274,6 +296,20 @@ describe('dynamic model score resolution', () => {
     assert.ok(model)
     assert.equal(model.intell, 0.25)
     assert.equal(model.isEstimatedScore, false)
+  })
+
+  it('uses aliased scores.js entries for OpenCode Zen chat models', () => {
+    const model = toOpenCodeModelMeta({
+      id: 'minimax-m2.5-free',
+    })
+
+    assert.ok(model)
+    assert.equal(model.intell, 0.802)
+    assert.equal(model.isEstimatedScore, false)
+  })
+
+  it('ignores OpenCode Zen models that are not chat-completions compatible', () => {
+    assert.equal(toOpenCodeModelMeta({ id: 'gpt-5.4' }), null)
   })
 })
 
