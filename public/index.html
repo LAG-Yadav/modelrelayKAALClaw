@@ -1604,14 +1604,15 @@
         if (!metaLoaded) {
           loadMeta();
         }
-        const res = await fetch('/api/models');
-        const data = await res.json();
+        const [modelsRes, configRes] = await Promise.all([
+          fetch('/api/models'),
+          fetch('/api/config'),
+        ]);
+        const data = await modelsRes.json();
+        const providers = await configRes.json();
 
         // Calculate QoS for each model
-        const providers = new Set();
         allModels = data.models.map(m => {
-          providers.add(m.providerKey);
-
           let isRateLimited = false;
           let rateLimitResetMs = 0;
           if (m.rateLimit) {
@@ -1639,14 +1640,7 @@
         });
 
         // Populate Provider Checkboxes
-        const providerGroup = document.getElementById('filter-provider-group');
-        if (providerGroup.children.length === 0) {
-          const provHtml = [];
-          Array.from(providers).sort().forEach(p => {
-            provHtml.push(`<label class="cb-label"><input type="checkbox" value="${p}" checked onchange="render(true)"> ${p}</label>`);
-          });
-          providerGroup.innerHTML = provHtml.join('');
-        }
+        renderProviderFilterGroup(providers);
 
         render(); // triggers automatic (non-user) layout pass
         updateKPIs(allModels, data.best, data.pinnedModelId);
@@ -2444,6 +2438,22 @@
       return d.toLocaleString();
     }
 
+    function formatPingHover(p) {
+      const parts = [];
+      const ts = p && p.ts ? formatIsoDateTime(p.ts) : null;
+      if (p && p.code === '200' && typeof p.ms === 'number') {
+        parts.push(`${p.ms}ms`);
+      } else if (p && p.code === '000') {
+        parts.push('timeout');
+      } else if (p && p.code != null) {
+        parts.push(`HTTP ${p.code}`);
+      } else {
+        parts.push('ping');
+      }
+      if (ts && ts !== 'Never') parts.push(ts);
+      return parts.join(' • ');
+    }
+
     function setAutoUpdateSaveStatus(message, tone = 'muted') {
       const statusEl = document.getElementById('autoupdate-save-status');
       if (!statusEl) return;
@@ -2637,6 +2647,23 @@
       `;
     }
 
+    function renderProviderFilterGroup(providerConfigs) {
+      const providerGroup = document.getElementById('filter-provider-group');
+      if (!providerGroup) return;
+
+      const selected = new Set(Array.from(providerGroup.querySelectorAll('input:checked')).map(cb => cb.value));
+      const enabledProviders = (providerConfigs || []).filter(p => p.enabled);
+
+      providerGroup.innerHTML = enabledProviders
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .map(p => `<label class="cb-label"><input type="checkbox" value="${escapeHtml(p.key)}" checked onchange="render(true)"> ${escapeHtml(p.name)}</label>`)
+        .join('');
+
+      providerGroup.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+        cb.checked = selected.size === 0 || selected.has(cb.value);
+      });
+    }
+
     async function saveFilterRules() {
       const minSweInput = document.getElementById('min-swe-score');
       const minSweValue = minSweInput.value.trim();
@@ -2750,6 +2777,7 @@
         const filterRules = await filterRulesRes.json();
         renderAutoUpdateSettings(autoUpdate);
         renderFilterRules(filterRules, providers);
+        renderProviderFilterGroup(providers);
         const container = document.getElementById('providers-container');
         container.innerHTML = '';
 
@@ -2873,6 +2901,7 @@
             <div class="form-group" style="display:flex; gap:8px; align-items:center;">
               <input type="password" id="key-${p.key}" placeholder="${p.hasKey ? '\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022 (' + (tokenOptional ? 'API Key Configured' : 'Key Configured') + ')' : (tokenOptional ? 'Enter API Key (optional)...' : 'Enter API Key...')}" style="flex:1;" onblur="updateProviderKey('${p.key}')">
               <button onclick="const i=document.getElementById('key-${p.key}'); i.type=i.type==='password'?'text':'password'; this.textContent=i.type==='password'?'👁':'🙈';" style="border:1px solid var(--border); background:white; cursor:pointer; padding:8px 10px; border-radius:6px; font-size:0.85rem; white-space:nowrap;">👁</button>
+              ${p.hasKey ? `<button onclick="deleteProviderKey('${p.key}')" style="border:1px solid #fecaca; background:#fff1f2; color:#b91c1c; cursor:pointer; padding:8px 12px; border-radius:6px; font-size:0.8rem; font-weight:600; white-space:nowrap;">Delete Key</button>` : ''}
             </div>
             <div class="form-group" style="display:flex; gap:8px; align-items:center; margin-top:8px;">
               <span style="font-size:0.75rem; color:var(--text-muted); white-space:nowrap;">Ping interval (min):</span>
@@ -2910,6 +2939,18 @@
       });
       input.value = '';
       loadSettings();
+    }
+
+    async function deleteProviderKey(key) {
+      const input = document.getElementById(`key-${key}`);
+      await fetch('/api/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ providerKey: key, apiKey: null })
+      });
+      if (input) input.value = '';
+      await loadSettings();
+      await fetchData();
     }
 
     async function updateProviderBaseUrl(key) {
@@ -3433,7 +3474,7 @@
             ? Math.max(15, Math.round((p.ms / maxMs) * 100))
             : 15;
           const color = ok ? 'var(--success)' : 'var(--error)';
-          const tip = ok ? `${p.ms}ms` : (p.code === '000' ? 'timeout' : `HTTP ${p.code}`);
+          const tip = escapeHtml(formatPingHover(p)).replace(/"/g, '&quot;');
           return `<div title="${tip}" style="flex:1; min-width:4px; height:${heightPct}%; background:${color}; border-radius:2px; opacity:0.8; cursor:default;"></div>`;
         }).join('');
 
